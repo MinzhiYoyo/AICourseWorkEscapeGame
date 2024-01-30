@@ -1,13 +1,13 @@
 # DQN play Escape Game
-[中文]()|[English]()
+[中文]() | [English]()
 
 # Gameplay Introduction
 
 ## Game Rules
-- The game is a 2D maze game, the player can move in four directions, and the goal is to gain more `coins` and to reach the `escape point`.
-- The player can move in `eight` directions. Up, down, left, right, and four directions of the diagonal line.
-- In your process of moving, you will cost some strengths. If you encounter a monster, you will lose `strength`. Diagonal lines is 3 strength, and the other directions is 2 strength. If you encounter a trap, you will lose `coins`. Diagonal lines is 3 strengt, other is 2.
-- On the map, there are 3 kinds of monster, `Gain Coin`, `Loss Coin`, `Gain Strength`.
+- This is a 2D maze game, the player's goal is to obtain as many rewards as possible and to reach the `escape point`.
+- The player can move in eight directions: `up`, `down`, `left`, `right`, as well as four diagonal directions.
+- It costs some `strength` to move. Moving in orthogonal directions costs 2 pts. of `strength`, and moving in diagonal directions costs 2 pts. of `strength`. 
+- Three kinds of perk are randomly distributed on the map, respectively, `Coin Gain`, `Coin Loss` and `Strength Gain`.
 
 ## State
 
@@ -27,6 +27,6 @@ pip3 install -r requirements.txt # Linux
 
 # Play
 
-# Reference
-Thank Pycharm: https://www.jetbrains.com/pycharm/
+# Acknowledgements
+Thank PyCharm: https://www.jetbrains.com/pycharm/
 
