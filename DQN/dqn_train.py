@@ -58,10 +58,10 @@ def dqn_train_model(model_path=None, model_dict_path=None, memory_path=None, rem
             best_episode_rewards = env.rewards
             best_step = episode
             best_coin = env.current_coins
-            best_strength = env.current_strength
+            best_strength = env.current_strengths
             best_log_file = os.path.join(experiment_log_dir, 'log_{}_best_{}.log'.format(get_time_info(), episode))
             best_model_dict_file = os.path.join(experiment_model_dir,
-                                           'model_dict_{}_best_{}.pth'.format(get_time_info(), episode))
+                                                'model_dict_{}_best_{}.pth'.format(get_time_info(), episode))
             env.save(best_log_file)
             agent.save_dict(best_model_dict_file)
 
@@ -74,11 +74,12 @@ def dqn_train_model(model_path=None, model_dict_path=None, memory_path=None, rem
                                                                                              end_time - start_time) / console_output_interval)))
             start_time = time.time()
             print('Episode: {}, rewards: {}, coins: {}, strength: {}, best rewards: {}, best coins: {}, '
-                  'best strength: {}'.format(episode, env.rewards, env.current_coins, env.current_strength,
+                  'best strength: {}'.format(episode, env.rewards, env.current_coins, env.current_strengths,
                                              best_episode_rewards, best_coin, best_strength))
             if need_save:
                 env.save(os.path.join(experiment_log_dir, 'log_{}_{}.log'.format(get_time_info(), episode)))
-                agent.save_dict(os.path.join(experiment_model_dir, 'model_dict_{}_{}.pth'.format(get_time_info(), episode)))
+                agent.save_dict(
+                    os.path.join(experiment_model_dir, 'model_dict_{}_{}.pth'.format(get_time_info(), episode)))
     experiment_log = ('{experiment_num}; {best_step}; {best_score}; {best_coins}; {best_strength}; {model_dict_path}; '
                       '{model_path}; {log_dir}; {model_dir}; {best_model_dict_path}; {best_log_file_path}; {'
                       'train_times}; {save_interval}; {remark}; {game_setting_info}\n').format(

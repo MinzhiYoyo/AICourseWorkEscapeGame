@@ -101,7 +101,6 @@ class EscapeGameEnv:
             ESCAPE_DISTANCE_MIN,
             STRENGTH_START, COIN_START, STRENGTH_MAP_SUM, GAIN_COIN_MAP_SUM, LOSS_COIN_MAP_SUM, GAIN_COIN_MAX,
             LOSS_COIN_MAX, POINT_STRENGTH, WALL_POINT_NUM)
-        self.current_strength = None
         self.done = None
         self.rewards = None
         self.current_position = None  # 当前位置
@@ -230,10 +229,18 @@ class EscapeGameEnv:
     # 下面是关于AI玩游戏的一些东西
     def _get_state(self):
         # 状态包括，当前可视范围的地图状态，当前坐标，当前行动力，当前金币，当前距离
-        ans = self.map[
-              self.current_position[0] - VISUAL_SIZE:self.current_position[0] + VISUAL_SIZE + 1,
-              self.current_position[1] - VISUAL_SIZE:self.current_position[1] + VISUAL_SIZE + 1
-              ].copy()
+        # 可视范围可能超过地图边界，超过地图边界的全填充为不可达点
+
+        ans = np.full((2 * VISUAL_SIZE + 1, 2 * VISUAL_SIZE + 1), MAP_STATE_UNREACHABLE_POINT, dtype=np.uint8)
+        for i in range(-VISUAL_SIZE, VISUAL_SIZE + 1):
+            for j in range(-VISUAL_SIZE, VISUAL_SIZE + 1):
+                if 0 <= self.current_position[0] + i < self.map.shape[0] and 0 <= self.current_position[1] + j < \
+                        self.map.shape[1]:
+                    ans[i + VISUAL_SIZE][j + VISUAL_SIZE] = self.map[self.current_position[0] + i][
+                        self.current_position[1] + j]
+
+
+
 
         # 将ans一维化
         ans = ans.reshape(-1)
