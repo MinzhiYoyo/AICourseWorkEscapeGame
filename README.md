@@ -6,8 +6,9 @@
 ## Game Rules
 - This is a 2D maze game, the player's goal is to obtain as many rewards as possible and to reach the `escape point`.
 - The player can move in eight directions: `up`, `down`, `left`, `right`, as well as four diagonal directions.
-- It costs some `strength` to move. Moving in orthogonal directions costs 2 pts. of `strength`, and moving in diagonal directions costs 2 pts. of `strength`. 
+- It costs some `strength` to move. Moving in orthogonal directions costs 2 pts. of `strength`, and moving in diagonal directions costs 3 pts. of `strength`. 
 - Three kinds of perk are randomly distributed on the map, respectively, `Coin Gain`, `Coin Loss` and `Strength Gain`.
+- There are obstacles (walls) with random lengths set on the map, which block the player from passing through. 
 
 ## State
 
