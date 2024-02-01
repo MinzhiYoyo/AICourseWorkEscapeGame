@@ -5,11 +5,11 @@ ACTION = int
 
 # 地图状态
 MAP_STATE_BLANK = 0
-MAP_STATE_ESCAPE_POINT = 1
-MAP_STATE_UNREACHABLE_POINT = 2
-MAP_STATE_STRENGTH = 3
-MAP_STATE_COIN_GAIN_MIN = 10  # 金币增益最小值 范围：[11, 10 + GAIN_COIN_MAX]
-MAP_STATE_COIN_LOSS_MIN = 20  # 金币减少最小值 范围：[21, 20 + LOSS_COIN_MAX]
+MAP_STATE_ESCAPE = 100
+MAP_STATE_WALL = 200
+MAP_STATE_STRENGTH = 20
+MAP_STATE_COIN_GAIN = 30
+MAP_STATE_COIN_LOSS = 40
 
 # x右为正，y下为正
 # x \in [0, 2*MAP_SIZE]
@@ -18,31 +18,33 @@ actions = np.array([0, 1, 2, 3, 4, 5, 6, 7], dtype=np.int32)
 directions = np.array([[0, -1], [0, 1], [-1, 0], [1, 0], [-1, -1], [1, -1], [-1, 1], [1, 1]], dtype=np.int32)
 # 行动消耗行动力
 STRENGTH_UNIT = 2
-action_cost_strength = np.array([STRENGTH_UNIT, STRENGTH_UNIT, STRENGTH_UNIT, STRENGTH_UNIT, STRENGTH_UNIT+1, STRENGTH_UNIT+1, STRENGTH_UNIT+1, STRENGTH_UNIT+1], dtype=np.int32)
+action_cost_strength = np.array(
+    [STRENGTH_UNIT, STRENGTH_UNIT, STRENGTH_UNIT, STRENGTH_UNIT, STRENGTH_UNIT + 1, STRENGTH_UNIT + 1,
+     STRENGTH_UNIT + 1, STRENGTH_UNIT + 1], dtype=np.int32)
 action_names = (
     '    up    ', '   down   ', '   left   ', '   right   ', ' up_left  ', ' up_right ', ' down_left', 'down_right')
 
 MAP_SIZE = 300  # 正方形地图半径，边长为：2*MAP_SIZE + 1
-VISUAL_SIZE = 30  # 可视范围
+VISUAL_SIZE = 50  # 可视范围
 START_POSITION = np.array([MAP_SIZE + 1, MAP_SIZE + 1], dtype=np.uint32)  # 初始位置
-COIN_WEIGHT = 70  # 金币分数权重
-STRENGTH_WEIGHT = 10  # 行动力分数权重
-DISTANCE_WEIGHT = 20  # 距离分数权重
-ESCAPE_DISTANCE_MAX = MAP_SIZE * 3  # 逃离点最大距离
-ESCAPE_DISTANCE_MIN = MAP_SIZE  # 逃离点最小距离
-STRENGTH_START = int(ESCAPE_DISTANCE_MAX * 1.3)  # 初始行动力
-COIN_START = int((MAP_SIZE + 1) * (MAP_SIZE + 1) * 0.01)  # 初始金币
 
-STRENGTH_MAP_SUM = int((MAP_SIZE + 1) * (MAP_SIZE + 1) * 0.1)  # 地图行动力总量，不是占有的格点数
-GAIN_COIN_MAP_SUM = int((MAP_SIZE + 1) * (MAP_SIZE + 1) * 0.1)  # 地图金币增益总量，不是占有的格点数
-LOSS_COIN_MAP_SUM = int((MAP_SIZE + 1) * (MAP_SIZE + 1) * 0.1)  # 地图金币减少总量，不是占有的格点数
+ESCAPE_DISTANCE = int(MAP_SIZE * 1.5) # 逃离点的距离
+STRENGTH_START = int(ESCAPE_DISTANCE * 1.5)  # 初始行动力
 
-GAIN_COIN_MAX = 10  # 金币增益最大值
-LOSS_COIN_MAX = 10  # 金币减少最大值
+# 初始金币 = 地图减益金币 < 地图金币总量
+COIN_START = int((MAP_SIZE + 1) * (MAP_SIZE + 1) * 0.05)  # 初始金币，为地图金币总量的1%
+MAP_SUM_STRENGTH = int((MAP_SIZE + 1) * (MAP_SIZE + 1) * 0.1)  # 地图行动力总量，不是占有的格点数
+MAP_SUM_GAIN_COIN = int((MAP_SIZE + 1) * (MAP_SIZE + 1) * 0.1)  # 地图金币增益总量，不是占有的格点数
+MAP_SUM_LOSS_COIN = int((MAP_SIZE + 1) * (MAP_SIZE + 1) * 0.05)  # 地图金币减少总量，不是占有的格点数
+MAP_SUM_WALL = int((MAP_SIZE + 1) * (MAP_SIZE + 1) * 0.01)  # 地图墙总量，也就是占有的格点数量
+
+POINT_COIN_GAIN = 10  # 点金币收益
+POINT_COIN_LOSS = 10  # 点金币减益
 POINT_STRENGTH = 10  # 点行动力
 
-WALL_POINT_NUM = 2 * MAP_SIZE + 1
-
+COIN_WEIGHT = 50  # 金币分数权重
+STRENGTH_WEIGHT = 10  # 行动力分数权重
+DISTANCE_WEIGHT = 40  # 距离分数权重
 GAMEPLAY_INTRODUCTION = """
 游戏玩法：
     智能体出生在坐标为(0, 0)处，智能体的目标是逃离地图，逃离点随机生成。
@@ -68,7 +70,7 @@ GAMEPLAY_INTRODUCTION = """
         5. 逃离点: 1
         6. 不可达点: -1
     智能体分数计算公式：
-    0.8 0.1 0.1
+    0.5 0.4 0.1
         金币权重 >> 距离权重 > 行动力权重
         分数 = 标准化算法 * 金币数权重 + 标准化算法 * 行动力权重 + 标准化算法 * 距离权重
     
@@ -78,9 +80,9 @@ GAMEPLAY_INTRODUCTION = """
     
     游戏结束条件：行动力归零或者到达终点
          
-        标准化算法：
-            1. 金币标准化算法：(当前 - (初始金币数 - 地图减益金币数)) / (地图增益金币数 + 地图减益金币数)
-            2. 行动力标准化算法：1 - (初始行动力 - 当前行动力 + 地图总行动力) / (初始行动力 + 地图总行动力)
+        标准化算法：保证初始化为50
+            1. 金币标准化算法：当前金币 / (地图增益金币 + 初始金币)
+            2. 行动力标准化算法：(初始行动力 - 当前行动力 + 地图总行动力) / (初始行动力 + 地图总行动力)
             3. 距离标准化算法：(初始距离 - 当前距离) / 初始距离
 """
 
@@ -93,36 +95,26 @@ GAMEPLAY_INTRODUCTION = """
 class EscapeGameEnv:
     def __init__(self):
         # 运行中的状态变量
-        self.game_setting_info = ('map_size={},visual_size={},coin_wight={},strength_weight={},distance_weight={},'
-                                  'escape_distance_max={},escape_distance_min={},strength_start={},coin_start={},'
-                                  'strength_map_sum={},gain_coin_map_sum={},loss_coin_map_sum={},gain_coin_max={},'
-                                  'loss_coin_max={},point_strength={},wall_point_num={}').format(
-            MAP_SIZE, VISUAL_SIZE, COIN_WEIGHT, STRENGTH_WEIGHT, DISTANCE_WEIGHT, ESCAPE_DISTANCE_MAX,
-            ESCAPE_DISTANCE_MIN,
-            STRENGTH_START, COIN_START, STRENGTH_MAP_SUM, GAIN_COIN_MAP_SUM, LOSS_COIN_MAP_SUM, GAIN_COIN_MAX,
-            LOSS_COIN_MAX, POINT_STRENGTH, WALL_POINT_NUM)
+        self.game_setting_info = ''
         self.done = None
         self.rewards = None
         self.current_position = None  # 当前位置
         self.current_strengths = None  # 当前行动力
         self.current_coins = None  # 当前金币
-        self.map_gain_coin_sum = 0  # 地图增益金币总数
-        self.map_loss_coin_sum = 0  # 地图减益金币总数
-        self.map_strength_sum = 0  # 地图行动力总数
+        self.current_map_sum = None  # 当前地图金币增益总数，地图金币减益总数，地图行动力总数
         self.distance_to_escape_point = None  # 距离逃离点的距离
 
-        self.Once_Game_Info = None # 游戏日志
+        self.Once_Game_Info = None  # 游戏日志
 
         # 运行中的算法变量
         self.Point_Occupied_Set = set()  # 已经占用的点，存np.ndarray
 
         # 初始化
-        current_state = self.reset()
-        self.state_size = current_state.shape[0]
+        self.Start_tate = self.reset()
         self.action_size = len(actions)
+
         print('Game Settings is :')
         print(self.game_setting_info)
-
 
     def reset(self):
         # 生成地图
@@ -136,10 +128,12 @@ class EscapeGameEnv:
         self.rewards = self._get_rewards()
         # 重置游戏结束标志
         self.done = False
+        # 初始化地图金币增益总数，地图金币减益总数，地图行动力总数剩余
+        self.current_map_sum = [MAP_SUM_GAIN_COIN, MAP_SUM_LOSS_COIN, MAP_SUM_STRENGTH]
 
         # 游戏日志，先保存地图，以稀疏矩阵的形式保存
         # (width, height);(x, y, map_state);
-        self.Once_Game_Info = '({},{})\n'.format(self.map.shape[0], self.map.shape[1])
+        self.Once_Game_Info = '({},{});'.format(self.map.shape[0], self.map.shape[1])
         for i in range(self.map.shape[0]):
             for j in range(self.map.shape[1]):
                 if self.map[i][j] != MAP_STATE_BLANK:
@@ -160,7 +154,7 @@ class EscapeGameEnv:
             # 没有越界
             flag = (0 <= t_p[0] < self.map.shape[0] and 0 <= t_p[1] < self.map.shape[1])
             # 没有越界的情况下，判断是否是不可达点
-            flag = flag and (not self.map[t_p[0]][t_p[1]] == MAP_STATE_UNREACHABLE_POINT)
+            flag = flag and (not self.map[t_p[0]][t_p[1]] == MAP_STATE_WALL)
             # 行动力是否够
             flag = flag and (self.current_strengths >= action_cost_strength[action])
             # 判断是否到达终点
@@ -180,32 +174,22 @@ class EscapeGameEnv:
                 else:
                     # 没有到达终点
                     # 判断是否是金币加成
-                    if MAP_STATE_COIN_GAIN_MIN < self.map[self.current_position[0]][
-                        self.current_position[1]] <= MAP_STATE_COIN_GAIN_MIN + GAIN_COIN_MAX:
+                    if self.map[self.current_position[0]][self.current_position[1]] == MAP_STATE_COIN_GAIN:
                         # 是金币加成
-                        self.current_coins += self.map[self.current_position[0]][
-                                                  self.current_position[1]] - MAP_STATE_COIN_GAIN_MIN
-                        self.map_gain_coin_sum -= (self.map[self.current_position[0]][
-                                                       self.current_position[1]] - MAP_STATE_COIN_GAIN_MIN)
-                        self.map[self.current_position[0]][self.current_position[1]] = MAP_STATE_BLANK
-                        g = 'GainCoin_{:<3d}'.format(
-                            self.map[self.current_position[0]][self.current_position[1]] - MAP_STATE_COIN_GAIN_MIN)
+                        self.current_coins += POINT_COIN_GAIN
+                        self.current_map_sum[0] -= POINT_COIN_GAIN
+                        g = 'GainCoin_{:<3d}'.format(POINT_COIN_GAIN)
                     # 判断是否是金币减少
-                    elif MAP_STATE_COIN_LOSS_MIN < self.map[self.current_position[0]][
-                        self.current_position[1]] <= MAP_STATE_COIN_LOSS_MIN + LOSS_COIN_MAX:
-                        # 是金币减少
-                        self.current_coins -= self.map[self.current_position[0]][
-                                                  self.current_position[1]] - MAP_STATE_COIN_LOSS_MIN
-                        self.map_loss_coin_sum -= (self.map[self.current_position[0]][
-                                                       self.current_position[1]] - MAP_STATE_COIN_LOSS_MIN)
-                        self.map[self.current_position[0]][self.current_position[1]] = MAP_STATE_BLANK
-                        g = 'LossCoin_{:<3d}'.format(
-                            self.map[self.current_position[0]][self.current_position[1]] - MAP_STATE_COIN_LOSS_MIN)
+                    elif self.map[self.current_position[0]][self.current_position[1]] == MAP_STATE_COIN_LOSS:
+                        # 是金币加成
+                        self.current_coins += POINT_COIN_LOSS
+                        self.current_map_sum[1] -= POINT_COIN_LOSS
+                        g = 'GainCoin_{:<3d}'.format(POINT_COIN_LOSS)
                     # 判断是否是行动力加成
                     elif self.map[self.current_position[0]][self.current_position[1]] == MAP_STATE_STRENGTH:
                         # 是行动力加成
                         self.current_strengths += POINT_STRENGTH
-                        self.map_strength_sum -= POINT_STRENGTH
+                        self.current_map_sum[2] -= POINT_STRENGTH
                         self.map[self.current_position[0]][self.current_position[1]] = MAP_STATE_BLANK
                         g = 'GainStrength_{}'.format(POINT_STRENGTH)
             # 行动力为0，游戏结束
@@ -231,40 +215,40 @@ class EscapeGameEnv:
         # 状态包括，当前可视范围的地图状态，当前坐标，当前行动力，当前金币，当前距离
         # 可视范围可能超过地图边界，超过地图边界的全填充为不可达点
 
-        ans = np.full((2 * VISUAL_SIZE + 1, 2 * VISUAL_SIZE + 1), MAP_STATE_UNREACHABLE_POINT, dtype=np.uint8)
+        image_state = np.full((2 * VISUAL_SIZE + 1, 2 * VISUAL_SIZE + 1), MAP_STATE_WALL, dtype=np.uint8)
         for i in range(-VISUAL_SIZE, VISUAL_SIZE + 1):
             for j in range(-VISUAL_SIZE, VISUAL_SIZE + 1):
                 if 0 <= self.current_position[0] + i < self.map.shape[0] and 0 <= self.current_position[1] + j < \
                         self.map.shape[1]:
-                    ans[i + VISUAL_SIZE][j + VISUAL_SIZE] = self.map[self.current_position[0] + i][
+                    image_state[i + VISUAL_SIZE][j + VISUAL_SIZE] = self.map[self.current_position[0] + i][
                         self.current_position[1] + j]
 
+        # 游戏参数状态
+        info_state = np.array([self.current_position[0], self.current_position[1], self.current_strengths,
+                               self.current_coins, self.distance_to_escape_point], dtype=np.int32)
 
-
-
-        # 将ans一维化
-        ans = ans.reshape(-1)
-        # 增加当前坐标
-        ans = np.append(ans, self.current_position)
-        # 增加当前行动力
-        ans = np.append(ans, self.current_strengths)
-        # 增加当前金币
-        ans = np.append(ans, self.current_coins)
-        # 增加当前距离
-        ans = np.append(ans, self.distance_to_escape_point)
-        return ans
+        return (image_state, info_state)
+        # # 将ans一维化
+        # ans = ans.reshape(-1)
+        # # 增加当前坐标
+        # ans = np.append(ans, self.current_position)
+        # # 增加当前行动力
+        # ans = np.append(ans, self.current_strengths)
+        # # 增加当前金币
+        # ans = np.append(ans, self.current_coins)
+        # # 增加当前距离
+        # ans = np.append(ans, self.distance_to_escape_point)
+        # return ans
 
     def _get_rewards(self):
         # 计算金币标准化分数
-        coin_rewards = (self.current_coins - (COIN_START - self.map_loss_coin_sum)) / (
-                self.map_gain_coin_sum + self.map_loss_coin_sum)
+        coin_rewards = self.current_coins / (self.current_map_sum[0] - self.current_map_sum[1] + COIN_START)
         # 计算行动力标准化分数
-        strengths_rewards = 1 - (STRENGTH_START - self.current_strengths + self.map_strength_sum) / (
-                STRENGTH_START + self.map_strength_sum)
+        strengths_rewards = (STRENGTH_START - self.current_strengths + self.current_map_sum[2]) / (
+                STRENGTH_START + self.current_map_sum[2])
         # 计算距离标准化分数
-        s_d = EscapeGameEnv._get_two_points_distance(START_POSITION, self.escape_point_distance)
         c_d = EscapeGameEnv._get_two_points_distance(self.current_position, self.escape_point_distance)
-        distance_rewards = (s_d - c_d) / s_d
+        distance_rewards = (ESCAPE_DISTANCE - c_d) / ESCAPE_DISTANCE
         return coin_rewards * COIN_WEIGHT + strengths_rewards * STRENGTH_WEIGHT + distance_rewards * DISTANCE_WEIGHT
 
     ## 下面是关于游戏的算法与功能函数
@@ -293,7 +277,7 @@ class EscapeGameEnv:
         # 初始化地图金币增益
         self._random_choice_points_from_map('gain_coin')
         # 初始化地图金币减益
-        self._random_choice_points_from_map('loss_coin')
+        # self._random_choice_points_from_map('loss_coin')
         # self._generate_coin()
 
     @staticmethod
@@ -314,9 +298,9 @@ class EscapeGameEnv:
     # 生成墙的算法
     def _generate_wall(self):
         # 使用微信抢红包的算法
-        wall_point_num = np.random.randint(WALL_POINT_NUM // 2, WALL_POINT_NUM + 1, dtype=np.uint32)
+        wall_point_num = MAP_SUM_WALL
         wall_num = np.random.randint(1, 10) - 1
-        while wall_point_num > 0 and wall_num > 0:
+        while wall_point_num > 0 or wall_num > 0:
             the_wall_start_point = np.random.randint([0, 0], [self.map.shape[0], self.map.shape[1]], dtype=np.uint32)
             # 开始点及开始点周围八个点都没有被占用
             while (the_wall_start_point[0], the_wall_start_point[1]) in self.Point_Occupied_Set or np.array(
@@ -327,7 +311,7 @@ class EscapeGameEnv:
             # 生成墙，使用栈来保存可用点
             the_wall_point_stack = [the_wall_start_point]
             # 这堵墙的最大长度为
-            the_wall_max_length = np.random.randint(1, wall_point_num // 2, dtype=np.uint32)
+            the_wall_max_length = np.random.randint(1, wall_point_num // 2, dtype=np.uint32) if wall_num > 1 else wall_point_num
             the_wall_direction = directions[np.random.randint(len(directions), dtype=np.uint32)]
             while len(the_wall_point_stack) < the_wall_max_length:
                 the_wall_next_point = the_wall_point_stack[-1] + the_wall_direction
@@ -342,89 +326,35 @@ class EscapeGameEnv:
                     the_wall_point_stack.pop()
                     break
                 the_wall_point_stack.append(the_wall_next_point)
-            pass
             # 生成墙
             for a_point_stack in the_wall_point_stack:
-                self.map[a_point_stack[0]][a_point_stack[1]] = MAP_STATE_UNREACHABLE_POINT
+                self.map[a_point_stack[0]][a_point_stack[1]] = MAP_STATE_WALL
             self.Point_Occupied_Set.update(tuple(map(tuple, the_wall_point_stack)))
             wall_point_num -= len(the_wall_point_stack)
             wall_num -= 1
 
-    def _generate_strength(self):
-        strength_sum = np.random.randint(STRENGTH_MAP_SUM // 2, STRENGTH_MAP_SUM)
-        strength_point_num = strength_sum // MAP_STATE_STRENGTH
-        while strength_point_num > 0:
-            the_strength_point = np.random.randint([0, 0], [self.map.shape[0], self.map.shape[1]], dtype=np.uint32)
-            while (the_strength_point[0], the_strength_point[1]) in self.Point_Occupied_Set:
-                the_strength_point = np.random.randint([0, 0], [self.map.shape[0], self.map.shape[1]], dtype=np.uint32)
-            self.map[the_strength_point[0]][the_strength_point[1]] = MAP_STATE_STRENGTH
-            self.map_strength_sum += POINT_STRENGTH
-            self.Point_Occupied_Set.add((the_strength_point[0], the_strength_point[1]))
-            strength_point_num -= 1
-
-    def _generate_coin(self):
-        # 金币增益
-        gain_coin_sum = np.random.randint(GAIN_COIN_MAP_SUM // 2, GAIN_COIN_MAP_SUM)
-        gain_coin_point_num = gain_coin_sum // MAP_STATE_COIN_GAIN_MIN
-        while gain_coin_point_num > 0:
-            the_gain_coin_point = np.random.randint([0, 0], [self.map.shape[0], self.map.shape[1]], dtype=np.uint32)
-            while (the_gain_coin_point[0], the_gain_coin_point[1]) in self.Point_Occupied_Set:
-                the_gain_coin_point = np.random.randint([0, 0], [self.map.shape[0], self.map.shape[1]], dtype=np.uint32)
-            the_gain_coin_is_ = np.random.randint(1, GAIN_COIN_MAX + 1) + MAP_STATE_COIN_GAIN_MIN
-            self.map[the_gain_coin_point[0]][the_gain_coin_point[1]] = the_gain_coin_is_
-            self.map_gain_coin_sum += the_gain_coin_is_
-            self.Point_Occupied_Set.add((the_gain_coin_point[0], the_gain_coin_point[1]))
-            gain_coin_point_num -= 1
-        # 金币减少
-        loss_coin_sum = np.random.randint(LOSS_COIN_MAP_SUM // 2, LOSS_COIN_MAP_SUM)
-        loss_coin_point_num = loss_coin_sum // MAP_STATE_COIN_LOSS_MIN
-        while loss_coin_point_num > 0:
-            the_loss_coin_point = np.random.randint([0, 0], [self.map.shape[0], self.map.shape[1]], dtype=np.uint32)
-            while (the_loss_coin_point[0], the_loss_coin_point[1]) in self.Point_Occupied_Set:
-                the_loss_coin_point = np.random.randint([0, 0], [self.map.shape[0], self.map.shape[1]], dtype=np.uint32)
-            the_loss_coin_is_ = np.random.randint(1, LOSS_COIN_MAX + 1) + MAP_STATE_COIN_LOSS_MIN
-            self.map[the_loss_coin_point[0]][the_loss_coin_point[1]] = the_loss_coin_is_
-            self.map_loss_coin_sum += the_loss_coin_is_
-            self.Point_Occupied_Set.add((the_loss_coin_point[0], the_loss_coin_point[1]))
-            loss_coin_point_num -= 1
-
     # 定义一个在地图中随机取若干个点的函数
-    def _random_choice_points_from_map(self, type):
-        # data = {
-        #     'gain_coin': {'sum': GAIN_COIN_MAP_SUM, 'min': MAP_STATE_COIN_GAIN_MIN, 'max': GAIN_COIN_MAX},
-        #     'loss_coin': {'sum': LOSS_COIN_MAP_SUM, 'min': MAP_STATE_COIN_LOSS_MIN, 'max': LOSS_COIN_MAX},
-        #     'strength': {'sum': STRENGTH_MAP_SUM, 'min': MAP_STATE_STRENGTH}
-        # }
-        if type == 'gain_coin':
-            sum_val = GAIN_COIN_MAP_SUM
-            min_val = MAP_STATE_COIN_GAIN_MIN
-            max_val = GAIN_COIN_MAX
-        elif type == 'loss_coin':
-            sum_val = LOSS_COIN_MAP_SUM
-            min_val = MAP_STATE_COIN_LOSS_MIN
-            max_val = LOSS_COIN_MAX
-        elif type == 'strength':
-            sum_val = STRENGTH_MAP_SUM
-            min_val = MAP_STATE_STRENGTH
+    def _random_choice_points_from_map(self, point_type):
+        if point_type == 0:
+            sum_val = MAP_SUM_GAIN_COIN
+            map_flag = MAP_STATE_COIN_GAIN
+            point_value = POINT_COIN_GAIN
+        elif point_type == 1:
+            sum_val = MAP_SUM_LOSS_COIN
+            map_flag = MAP_STATE_COIN_LOSS
+            point_value = POINT_COIN_LOSS
+        elif point_type == 2:
+            sum_val = MAP_SUM_STRENGTH
+            map_flag = MAP_STATE_STRENGTH
+            point_value = POINT_STRENGTH
         else:
             return
-        sum_ = np.random.randint(sum_val // 2, sum_val)
-        point_num = sum_ // min_val
+        point_num = sum_val // point_value
         while point_num > 0:
             the_point = np.random.randint([0, 0], [self.map.shape[0], self.map.shape[1]], dtype=np.uint32)
             while (the_point[0], the_point[1]) in self.Point_Occupied_Set:
                 the_point = np.random.randint([0, 0], [self.map.shape[0], self.map.shape[1]], dtype=np.uint32)
-            if type == 'gain_coin':
-                the_point_is_ = np.random.randint(1, max_val + 1) + min_val
-                self.map[the_point[0]][the_point[1]] = the_point_is_
-                self.map_gain_coin_sum += the_point_is_
-            elif type == 'loss_coin':
-                the_point_is_ = np.random.randint(1, max_val + 1) + min_val
-                self.map[the_point[0]][the_point[1]] = the_point_is_
-                self.map_loss_coin_sum += the_point_is_
-            elif type == 'strength':
-                self.map[the_point[0]][the_point[1]] = MAP_STATE_STRENGTH
-                self.map_strength_sum += POINT_STRENGTH
+            self.map[the_point[0]][the_point[1]] = map_flag
             self.Point_Occupied_Set.add((the_point[0], the_point[1]))
             point_num -= 1
 
@@ -434,14 +364,10 @@ if __name__ == '__main__':
     out = np.zeros((2 * MAP_SIZE + 1, 2 * MAP_SIZE + 1), dtype=str)
     out[env.map == MAP_STATE_BLANK] = ' '
     out[env.map == MAP_STATE_STRENGTH] = 'S'
-    for i in range(MAP_STATE_COIN_GAIN_MIN, MAP_STATE_COIN_GAIN_MIN + GAIN_COIN_MAX):
-        out[env.map == i] = 'G'
-    for i in range(MAP_STATE_COIN_LOSS_MIN, MAP_STATE_COIN_LOSS_MIN + LOSS_COIN_MAX):
-        out[env.map == i] = 'L'
-    # out[env.map >= MAP_STATE_COIN_GAIN_MIN and env.map <= (MAP_STATE_COIN_GAIN_MIN + GAIN_COIN_MAX)] = 'G'
-    # out[env.map >= MAP_STATE_COIN_LOSS_MIN and env.map <= (MAP_STATE_COIN_LOSS_MIN + LOSS_COIN_MAX)] = 'L'
-    out[env.map == MAP_STATE_UNREACHABLE_POINT] = 'X'
-    out[env.map == MAP_STATE_ESCAPE_POINT] = 'E'
+    out[env.map == MAP_STATE_COIN_GAIN] = 'G'
+    out[env.map == MAP_STATE_COIN_LOSS] = 'L'
+    out[env.map == MAP_STATE_WALL] = 'X'
+    out[env.map == MAP_STATE_ESCAPE] = 'E'
     out[env.current_position[0], env.current_position[1]] = 'A'
     out[env.escape_point_distance[0], env.escape_point_distance[1]] = 'B'
     # 保存到文件

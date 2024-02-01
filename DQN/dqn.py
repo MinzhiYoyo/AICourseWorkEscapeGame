@@ -14,12 +14,21 @@ from Function.function import get_time_info
 class DQNet(nn.Module):
     def __init__(self, input_size, output_size):
         super(DQNet, self).__init__()
+        # 改成两层卷积层，两层池化层，一层全连接层处理图像
+        # 两层全连接层处理info数据
+        # 将上述两个结果拼接后，再进行一层全连接层
+        # 最后输出
+
+        self.cv1 = nn.Conv2d()
+
         self.fc1 = nn.Linear(input_size, 256)
         self.fc2 = nn.Linear(256, 128)
         self.fc3 = nn.Linear(128, 64)
         self.out = nn.Linear(64, output_size)
 
     def forward(self, x):
+        # x is a tuple, x[0] is image, x[1] is info
+
         x = torchF.relu(self.fc1(x))
         x = torchF.relu(self.fc2(x))
         x = torchF.relu(self.fc3(x))
