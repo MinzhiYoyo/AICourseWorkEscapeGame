@@ -77,7 +77,7 @@ SCORE_STRENGTH = -1
 
 
 class TSPvariant(object):
-    def __init__(self, map_file=None):
+    def __init__(self, map_str_or_file=None):
         self.game_info = None
         self.last_map_state = None
         self.done = None
@@ -99,7 +99,7 @@ class TSPvariant(object):
 
         self.map_str = None
         self.map_path = None
-        state = self.reset(data_map=map_file)
+        state = self.reset(data_map=map_str_or_file)
         self.state_size = len(state)
         self.action_size = len(actions)
 
@@ -127,9 +127,13 @@ class TSPvariant(object):
             self.wall_point.clear()
             self.cities.clear()
             self._generate_map(data_map)
+        else:
+            self.map_data[self.current_position[0], self.current_position[1]] = MAP_BLANK
+            for city in self.cities:
+                self.map_data[city[0], city[1]] = MAP_CITY
         self.map_data[START_POINT[0], START_POINT[1]] = MAP_AGENT
         self._save_map(output_map_file)
-        self.game_info = self.map_str
+        self.game_info = self.map_str + '\n'
         return self._state()
 
     # 游戏结束情况
@@ -140,27 +144,30 @@ class TSPvariant(object):
             s_p = self.current_position.copy()
             t_p = self.current_position + directions[action]
 
-            if ((t_p[0], t_p[1]) in self.wall_point) or t_p[0] < 0 or t_p[0] >= self.map_data.shape[0] or t_p[1] < 0 or t_p[1] >= self.map_data.shape[1]:
+            if ((t_p[0], t_p[1]) in self.wall_point) or t_p[0] < 0 or t_p[0] >= self.map_data.shape[0] or t_p[1] < 0 or \
+                    t_p[1] >= self.map_data.shape[1]:
                 # 该步移动无效
                 # print('Invalid action')
                 pass
             else:
                 self.current_position = t_p
-                self.map_data[s_p[0], s_p[1]] = self.last_map_state if self.last_map_state is not None and not self.last_map_state == MAP_AGENT else MAP_BLANK
+                self.map_data[s_p[0], s_p[
+                    1]] = self.last_map_state if self.last_map_state is not None and not self.last_map_state == MAP_AGENT else MAP_BLANK
                 self.map_data[self.current_position[0], self.current_position[1]] = MAP_AGENT
                 self.strength += 1
                 for i, city in enumerate(self.cities):
                     if city[0] == t_p[0] and city[1] == t_p[1]:
                         self.map_data[t_p[0], t_p[1]] = MAP_CITY_VISITED
                         self.cities[i][2] = True
-                if self.current_position[0] == START_POINT[0] and self.current_position[1] == START_POINT[1] and self.strength > 1:
+                if self.current_position[0] == START_POINT[0] and self.current_position[1] == START_POINT[
+                    1] and self.strength > 1:
                     self.done = True
                 self.last_map_state = self.map_data[self.current_position[0], self.current_position[1]]
         self.rewards = self._rewards()
         if self.rewards < 0 or self.strength > MAP_SIZE * MAP_SIZE:
             self.done = True
-        info = '{},{},score={:.2f},distance={:.2f},strength={:.2f},cities={:.2f},start={:.2f},done={}'.format(
-            self.current_position[0], self.current_position[1], self.rewards, self.distance_score, self.strength_score,
+        info = '{},{},action={},score={:.2f},distance={:.2f},strength={:.2f},cities={:.2f},start={:.2f},done={}'.format(
+            self.current_position[0], self.current_position[1],action, self.rewards, self.distance_score, self.strength_score,
             self.cities_score, self.start_score, self.done
         )
         self.game_info += info
@@ -169,9 +176,12 @@ class TSPvariant(object):
 
     def _state(self):
         # 返回map即可
-        ans:np.ndarray = self.map_data.copy()
+        ans: np.ndarray = self.map_data.copy()
         # 将ans 一维化
         ans = ans.reshape(-1)
+        # 将strength添加
+        ans = np.append(ans, self.strength)
+        ans = ans.astype(np.float32)
         return ans
 
     def _rewards(self):
@@ -208,13 +218,14 @@ class TSPvariant(object):
                 dis_to_cities.append((md, ed))
         if remain_cities > 0:
             # 降序排序
-            dis_to_cities.sort(key=lambda x: WEIGHT_MH*x[0] + WEIGH_E*x[1], reverse=True)
+            dis_to_cities.sort(key=lambda x: WEIGHT_MH * x[0] + WEIGH_E * x[1], reverse=True)
             # 复制最后一项visited_cities次
             dis_to_cities += [dis_to_cities[-1]] * visited_cities
             weight = 0.5
             index = 0
             while index < remain_cities:
-                self.distance_score += weight*(WEIGHT_MH * dis_to_cities[index][0] + WEIGH_E * dis_to_cities[index][1])
+                self.distance_score += weight * (
+                        WEIGHT_MH * dis_to_cities[index][0] + WEIGH_E * dis_to_cities[index][1])
                 index += 1
                 weight /= 2
         s_md = TSPvariant._y_manhattan(TSPvariant._get_distance_manhattan(self.current_position, START_POINT))
@@ -272,7 +283,8 @@ class TSPvariant(object):
                 for d in directions
             ]).any():
                 continue
-            the_wall_max_length = np.random.randint(1, wall_point_num // 2) if wall_num > 0 and wall_point_num > 2 else wall_point_num
+            the_wall_max_length = np.random.randint(1,
+                                                    wall_point_num // 2) if wall_num > 0 and wall_point_num > 2 else wall_point_num
             the_wall_direction = directions[np.random.randint(0, ACTION_NUM)]
             the_wall_point_stack = [the_wall_start_point]
             while len(the_wall_point_stack) < the_wall_max_length:
@@ -318,7 +330,7 @@ class TSPvariant(object):
         else:
             map_data = json.loads(map_data)
         self.map_data = np.zeros((map_data['map_size'], map_data['map_size']), dtype=np.int64)
-        self.cities = list() # map_data['cities']
+        self.cities = list()  # map_data['cities']
 
         for city in map_data['cities']:
             self.cities.append([city[0], city[1], False])
@@ -350,7 +362,46 @@ class TSPvariant(object):
         with open(best_log_file, 'w') as f:
             f.write(self.game_info)
 
+    @staticmethod
+    def replay_log(log_file):
+        """
+        :param log_file:
+        :return: map_str and action list
+        """
+
+        def get_action(last_pos, content_str: str):
+            s = content_str.split(',')
+            if len(s) < 2:
+                return -100, last_pos
+            pos = (int(s[0]), int(s[1]))
+            diff_pos = (pos[0] - last_pos[0], pos[1] - last_pos[1])
+            for i, direction in enumerate(directions):
+                if diff_pos[0] == direction[0] and diff_pos[1] == direction[1]:
+                    return i, pos
+            return -1, pos
+
+        with open(log_file, 'r') as f:
+            content = f.read()
+            content_list = content.split('\n')
+            tmp_ = content_list[0].split('}')
+            if len(tmp_) >= 1:
+                map_str = tmp_[0] + '}'
+            else:
+                map_str = content_list[0]
+            if len(tmp_) >= 2:
+                content_list = tmp_[1:] + content_list[1:]
+            else:
+                content_list = content_list[1:]
+            action_list = []
+            pos = START_POINT
+            for c in content_list:
+                a, pos = get_action(pos, c)
+                action_list.append(a)
+        return map_str, action_list
+
 
 if __name__ == '__main__':
     env = TSPvariant()
     env.reset(output_map_file='./test.json')
+
+

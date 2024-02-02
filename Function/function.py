@@ -24,7 +24,7 @@ def experiment_save_init():
         with open(experiment_log_file_path, 'w') as f:
             # 实验次数，最大分数的一次step值，最大分数的一次分数值，最大分数的一次金币，最大分数的一次剩余行动力，使用的模型参数路径，使用的模型路径，输出的日志文件夹，输出的模型文件夹，输出最好一次的模型参数文件路径，输出最好一次的日志文件路径，训练次数，保存间隔，备注，游戏设置
             f.write(
-                'experiment_times; best_episode; best_rewards; model_dict_path; model_path; '
+                'experiment_times; state_size; action_size; best_episode; best_rewards; model_dict_path; model_path; '
                 'log_dir;model_dir; remark; game_map\n')
     else:
         with open(experiment_log_file_path, 'r') as f:

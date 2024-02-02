@@ -1,3 +1,4 @@
+import json
 import math
 import os.path
 import random
@@ -53,10 +54,15 @@ class ReplayMemory(object):
         return state, action, reward, next_state
 
     def save(self, path):
-        pass
+        data = [[buf[0].tolist(), int(buf[1]), int(buf[2]), buf[3].tolist()] for buf in self.buffer]
+        if os.path.exists(path):
+            data_last = json.load(open(path, 'r'))
+            data += data_last
+        json.dump(data, open(path, 'w'))
 
     def load(self, path):
-        pass
+        data = json.load(open(path, 'r'))
+        self.buffer = [(np.array(buf[0]), buf[1], buf[2], np.array(buf[3])) for buf in data]
 
     def __len__(self):
         return len(self.buffer)
@@ -77,9 +83,10 @@ class DQNAgent:
                  model_path=None,  # 模型路径
                  model_dict_path=None,  # 模型字典路径
                  device=None,  # 设备
-                 memory_path=None  # 经验回放池路径
+                 memory_path=None,  # 经验回放池路径
                  ):
         # 保存超参数
+        self.q_eval = None
         self.loss = None
         self.learning_rate = learning_rate
         self.gamma = gamma
@@ -112,7 +119,7 @@ class DQNAgent:
             self.target_net = DQNet(self.state_size, self.action_size).to(self.device)
         # 初始化模型字典
         if model_dict_path:
-            self.eval_net.load_state_dict(torch.load(model_dict_path)).to(self.device)
+            self.eval_net.load_state_dict(torch.load(model_dict_path))
         self.target_net.load_state_dict(self.eval_net.state_dict())
 
         # 初始化优化器和损失函数
@@ -166,14 +173,14 @@ class DQNAgent:
         next_state_batch = torch.cat(next_state).to(self.device)
 
         # 计算Q值
-        q_eval = self.eval_net(state_batch).gather(1, action_batch)
+        self.q_eval = self.eval_net(state_batch).gather(1, action_batch)
 
         # 计算目标Q值
         q_next = self.target_net(next_state_batch).detach()
         q_target = reward_batch + self.gamma * q_next.max(1)[0].view(batch_size, 1)
 
         # 计算损失
-        self.loss = self.loss_func(q_eval, q_target)
+        self.loss = self.loss_func(self.q_eval, q_target)
 
         # 优化模型
         self.optimizer.zero_grad()

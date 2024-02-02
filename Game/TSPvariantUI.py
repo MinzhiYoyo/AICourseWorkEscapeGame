@@ -32,8 +32,9 @@ class TSPvariantUI(object):
         pygame.display.set_caption('TSPvariant')
         self.render(mode='agent')
 
-    def reset(self):
+    def reset(self, mode='agent'):
         pass
+        # self.render(mode=mode)
 
     def render(self, mode='agent'):
         self.screen.fill(COLOR_BACKGROUND)
@@ -62,7 +63,18 @@ class TSPvariantUI(object):
                     return TSPvariant.actions[3]
                 elif event.key == pygame.K_r:
                     return 100
-
+        elif mode == 'replay':
+            event = pygame.event.wait(1)
+            # 如果是空格或者是回车均可
+            if event.type == pygame.KEYDOWN and (event.key == pygame.K_SPACE or event.key == pygame.K_RETURN):
+                return 'space'
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_r:
+                return 'reset'
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_q:
+                return 'quit'
+            elif event.type == pygame.QUIT:
+                return 'quit'
+        return None
     def _draw_info(self):
         info1 = '({}, {}), steps = {}'.format(self.env.current_position[0], self.env.current_position[1], self.env.strength)
         info_2 = 'scores: {:.3f} \ndistance={:.2f}, strength={:.2f}\nstart={:.2f}, cities={:.2f}'.format(

@@ -11,8 +11,7 @@ from Function.function import get_time_info, log_dir, model_dir, experiment_log_
 from Game.TSPvariant import TSPvariant
 
 
-def dqn_train_model(model_path=None, model_dict_path=None, memory_path=None, remark='',
-                    memory_file_path=None, need_save=True, game_map_file_name=None):
+def dqn_train_model(model_path=None, model_dict_path=None, memory_path=None, remark='', need_save=True, game_map_file_name=None):
     # 实验保存初始化，并获取实验次数
     experiment_num = experiment_save_init()
     experiment_log_dir = os.path.join(log_dir, 'experiment_{}'.format(experiment_num))
@@ -22,7 +21,7 @@ def dqn_train_model(model_path=None, model_dict_path=None, memory_path=None, rem
     create_dir(experiment_model_dir)
     create_dir(game_map_dir)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    episodes_num = 1000 if torch.cuda.is_available() else 500
+    episodes_num = 500 if torch.cuda.is_available() else 500
 
     # 初始化游戏环境
     env = TSPvariant()
@@ -43,7 +42,7 @@ def dqn_train_model(model_path=None, model_dict_path=None, memory_path=None, rem
     console_output_interval = episodes_num // 20  # 打印间隔
     save_interval = episodes_num // 10  # 保存间隔
 
-    loss_info = 'episode; loss\n'
+    loss_info = 'episode; step; loss\n'
     start_time = time.time()
     map_json = os.path.join(game_map_dir, game_map_file_name)
     if not os.path.exists(map_json):
@@ -62,9 +61,9 @@ def dqn_train_model(model_path=None, model_dict_path=None, memory_path=None, rem
             one_game_log += '\n'
 
             agent.memory.push(state, action, reward, next_state)
-            agent.train()
+            agent.train(train_interval=10)
             if agent.loss:
-                loss_info += '{}; {}\n'.format(episode, agent.loss.item())
+                loss_info += '{}; {}; {}\n'.format(episode,agent.train_step, agent.loss.item())
             state = next_state
         if env.rewards > best_episode_rewards:
             best_episode_rewards = env.rewards
@@ -78,7 +77,9 @@ def dqn_train_model(model_path=None, model_dict_path=None, memory_path=None, rem
             best_log_file = os.path.join(experiment_log_dir, 'log_{}_best_{}.log'.format(get_time_info(), episode))
             best_model_dict_file = os.path.join(experiment_model_dir,
                                                 'model_dict_{}_best_{}.pth'.format(get_time_info(), episode))
+
             env.save(best_log_file)
+
             agent.save_dict(best_model_dict_file)
 
         if episode % console_output_interval == 0:
@@ -111,6 +112,9 @@ def dqn_train_model(model_path=None, model_dict_path=None, memory_path=None, rem
         f.write(experiment_log)
     with open(loss_record_path, 'w') as f:
         f.write(loss_info)
+    agent.memory.save(path=memory_path)
+
+
 
 
 if __name__ == '__main__':
