@@ -3,10 +3,14 @@ import time
 import Game.TSPvariant as tspEnv
 import Game.TSPvariantUI as tspUI
 
-def play():
+from DQN.dqn_train import dqn_train_model
+
+
+def human_play():
     env = tspEnv.TSPvariant()
     ui = tspUI.TSPvariantUI(env)
-    env.reset()
+    env.reset(output_map_file='human_play.json')
+    # env.reset(data_map='human_play.json')
     ui.reset()
     while True:
         action = ui.render(mode='human')
@@ -24,8 +28,21 @@ def play():
                 env.reset()
                 ui.reset()
                 info = None
-        if env.done:
-            break
     print('Game quit')
-    time.sleep(10)
-play()
+    time.sleep(2)
+
+
+def dqn_train():
+    remark = 'train map 1'
+    game_map_file_name = 'train_map_1.json'
+    dqn_train_model(remark=remark, game_map_file_name=game_map_file_name)
+
+
+def main():
+    dqn_train()
+    # human_play()
+    pass
+
+
+if __name__ == '__main__':
+    main()

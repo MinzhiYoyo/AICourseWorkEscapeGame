@@ -7,6 +7,7 @@ Transition = namedtuple('Transition',
 
 log_dir = './log/'
 model_dir = './model/'
+game_map_dir = './map/'
 experiment_log_file_path = './experiment_log.log'
 
 
@@ -14,7 +15,6 @@ experiment_log_file_path = './experiment_log.log'
 def create_dir(dir_path):
     if not os.path.exists(dir_path):
         os.makedirs(dir_path)
-
 
 # 创建文件函数
 def experiment_save_init():
@@ -24,9 +24,8 @@ def experiment_save_init():
         with open(experiment_log_file_path, 'w') as f:
             # 实验次数，最大分数的一次step值，最大分数的一次分数值，最大分数的一次金币，最大分数的一次剩余行动力，使用的模型参数路径，使用的模型路径，输出的日志文件夹，输出的模型文件夹，输出最好一次的模型参数文件路径，输出最好一次的日志文件路径，训练次数，保存间隔，备注，游戏设置
             f.write(
-                'experiment_times; best_step; best_score; best_coins; best_strength; model_dict_path; model_path; '
-                'log_dir;model_dir; best_model_dict_path; best_log_file_path; train_times; save_interval; remark; '
-                'game_setting_info\n')
+                'experiment_times; best_episode; best_rewards; model_dict_path; model_path; '
+                'log_dir;model_dir; remark; game_map\n')
     else:
         with open(experiment_log_file_path, 'r') as f:
             content = f.read()

@@ -63,8 +63,8 @@ NUM_WALL = 3
 START_POINT = np.array([0, 0])
 
 # 距离分数权重
-WEIGHT_MH = 7
-WEIGH_E = 3
+WEIGHT_MH = 0.8
+WEIGH_E = 0.2
 
 # 城市分数
 SCORE_CITY = 100
@@ -77,7 +77,8 @@ SCORE_STRENGTH = -1
 
 
 class TSPvariant(object):
-    def __init__(self):
+    def __init__(self, map_file=None):
+        self.game_info = None
         self.last_map_state = None
         self.done = None
         self.map_data = None
@@ -98,7 +99,9 @@ class TSPvariant(object):
 
         self.map_str = None
         self.map_path = None
-        self.reset()
+        state = self.reset(data_map=map_file)
+        self.state_size = len(state)
+        self.action_size = len(actions)
 
     def reset(self, data_map=None, output_map_file=None, reset_map=True):
         self.done = False
@@ -112,6 +115,10 @@ class TSPvariant(object):
         self.start_score = 0
         self.last_map_state = None
 
+        self.game_info = None
+        self.map_str = None
+        self.map_path = None
+
         # 将所有城市置 False
         if self.cities:
             for i, city in enumerate(self.cities):
@@ -120,8 +127,9 @@ class TSPvariant(object):
             self.wall_point.clear()
             self.cities.clear()
             self._generate_map(data_map)
-            self._save_map(output_map_file)
         self.map_data[START_POINT[0], START_POINT[1]] = MAP_AGENT
+        self._save_map(output_map_file)
+        self.game_info = self.map_str
         return self._state()
 
     # 游戏结束情况
@@ -149,25 +157,35 @@ class TSPvariant(object):
                     self.done = True
                 self.last_map_state = self.map_data[self.current_position[0], self.current_position[1]]
         self.rewards = self._rewards()
-        info = '{},{},score={:.4f},distance={:.4f},strength={:.4f},cities={:.4f},start={:.4f}'.format(
+        if self.rewards < 0 or self.strength > MAP_SIZE * MAP_SIZE:
+            self.done = True
+        info = '{},{},score={:.2f},distance={:.2f},strength={:.2f},cities={:.2f},start={:.2f},done={}'.format(
             self.current_position[0], self.current_position[1], self.rewards, self.distance_score, self.strength_score,
-            self.cities_score, self.start_score
+            self.cities_score, self.start_score, self.done
         )
+        self.game_info += info
+        self.game_info += '\n'
         return self._state(), self.rewards, self.done, info
 
     def _state(self):
         # 返回map即可
-        return self.map_data
+        ans:np.ndarray = self.map_data.copy()
+        # 将ans 一维化
+        ans = ans.reshape(-1)
+        return ans
 
     def _rewards(self):
         """
-        分数构成：距离分数+行动力分数+城市分数+起始点分数
-            距离分数：所有未达到的城市 70 * 1./曼距离 + 30 * 1./欧距离 之和
-            行动力分数：行动力 * -1
-            城市分数：每到达一个城市 +100
-            起始点分数：与城市有关，与距离有关
-                城市有关：遍历过的城市 * 城市分数 / 城市数量
-                与距离相关：（70 * 1./曼距离 + 30 * 1./欧距离）*已经遍历的城市数量
+        思路：遍历城市之前，城市distance分数影响最大；遍历城市之后，起始点分数影响最大。
+        分数构成：距离分数+行动力分数+城市分数+起始点分数的加权和
+        权重为：距离 > 起始点 >> 行动力
+
+        s是地图大小，曼d哈顿与欧式距离，需要分别经过一个函数之后，用加权求和得到的 -> 距离分数
+
+           strength  行动力分数：行动力 * -0.5
+           city 城市分数：每到达一个城市 +50
+           distance 当前位置与所有城市的距离分数之和：
+           start 当前位置与起始点的距离 * 已经遍历城市的数量
         :return:
         """
         # 遍历城市
@@ -175,35 +193,43 @@ class TSPvariant(object):
         self.strength_score = self.strength * SCORE_STRENGTH
         self.cities_score = 0
         self.start_score = 0
+
+        visited_cities = 0
+        remain_cities = 0
+        dis_to_cities = []
         for city in self.cities:
             if city[2]:
                 self.cities_score += SCORE_CITY
-                self.start_score += 1
-                continue
-            # 计算曼哈顿距离
-            # 距离 = e ^ (-x/(map_size+map_size))
-            md = TSPvariant._get_distance_manhattan(self.current_position, city)
-            md = math.exp(-md / (MAP_SIZE + MAP_SIZE))
-            # 计算欧几里得距离
-            # 距离 = e ^ (-x/(map_size/sqrt(2)))
-            ed = TSPvariant._get_distance_euclidean(self.current_position, city)
-            ed = math.exp(-ed / (MAP_SIZE / math.sqrt(2)))
-            # 计算距离分数
-            self.distance_score += (WEIGHT_MH * md + WEIGH_E * ed)
-        self.start_score *= SCORE_START
-        s_md = TSPvariant._get_distance_manhattan(self.current_position, START_POINT)
-        s_md = math.exp(-s_md / (MAP_SIZE + MAP_SIZE))
-        s_ed = TSPvariant._get_distance_euclidean(self.current_position, START_POINT)
-        s_ed = math.exp(-s_ed / (MAP_SIZE / math.sqrt(2)))
-        self.start_score += (WEIGHT_MH * s_md + WEIGH_E * s_ed) / 5
-        return self.distance_score + self.strength_score + self.cities_score + self.start_score
+                visited_cities += 1
+            else:
+                remain_cities += 1
+                md = TSPvariant._y_manhattan(TSPvariant._get_distance_manhattan(self.current_position, city))
+                ed = TSPvariant._y_euclidean(TSPvariant._get_distance_euclidean(self.current_position, city))
+                dis_to_cities.append((md, ed))
+        if remain_cities > 0:
+            # 降序排序
+            dis_to_cities.sort(key=lambda x: WEIGHT_MH*x[0] + WEIGH_E*x[1], reverse=True)
+            # 复制最后一项visited_cities次
+            dis_to_cities += [dis_to_cities[-1]] * visited_cities
+            weight = 0.5
+            index = 0
+            while index < remain_cities:
+                self.distance_score += weight*(WEIGHT_MH * dis_to_cities[index][0] + WEIGH_E * dis_to_cities[index][1])
+                index += 1
+                weight /= 2
+        s_md = TSPvariant._y_manhattan(TSPvariant._get_distance_manhattan(self.current_position, START_POINT))
+        s_ed = TSPvariant._y_euclidean(TSPvariant._get_distance_euclidean(self.current_position, START_POINT))
+        self.start_score = (WEIGHT_MH * s_md + WEIGH_E * s_ed) * visited_cities
+        self.cities_score = SCORE_CITY * visited_cities
+        DISTANCE_WEIGHT = 100
+        STRENGTH_WEIGHT = 1
+        CITIES = 1
+        START = 50
+        return DISTANCE_WEIGHT * self.distance_score + STRENGTH_WEIGHT * self.strength_score + CITIES * self.cities_score + START * self.start_score
 
     def _generate_map(self, data_map=None):
 
         if data_map is not None:
-            # 判断是否是合法路径
-            if os.path.exists(data_map):
-                data_map = json.load(open(data_map, 'r'))
             self._load_map(data_map)
             return
 
@@ -268,10 +294,6 @@ class TSPvariant(object):
         return
 
     def _save_map(self, file_path):
-        if not file_path:
-            self.map_str = None
-            self.map_path = None
-            return
         # 将map以三元组的形式保存成str
         data = {
             'map_size': int(MAP_SIZE),
@@ -283,28 +305,36 @@ class TSPvariant(object):
         for obstacle in self.wall_point:
             data['obstacles'].append([int(obstacle[0]), int(obstacle[1])])
         # 以json的形式存储
+        if file_path:
+            json.dump(data, open(file_path, 'w'))
         self.map_str = json.dumps(data)
-        self.map_path = file_path
-        with open(file_path, 'w') as f:
-            f.write(self.map_str)
 
     def _load_map(self, map_data: str):
-        if not map_data:
-            return
         # 把json字符串解析
         # map['map_size']
         # 将map转成json
-        map_data = json.loads(map_data)
-        self.map_data = np.zeros((map_data['map_size'], 2), dtype=np.int64)
+        if os.path.exists(map_data):
+            map_data = json.load(open(map_data, 'r'))
+        else:
+            map_data = json.loads(map_data)
+        self.map_data = np.zeros((map_data['map_size'], map_data['map_size']), dtype=np.int64)
         self.cities = list() # map_data['cities']
 
         for city in map_data['cities']:
             self.cities.append([city[0], city[1], False])
-            self.map_data[city[0]][city[1]] = MAP_CITY
+            self.map_data[city[0], city[1]] = MAP_CITY
         self.wall_point = set()
         for (i, obstacle) in enumerate(map_data['obstacles']):
             self.wall_point.add((obstacle[0], obstacle[1]))
             self.map_data[obstacle[0]][obstacle[1]] = MAP_OBSTACLE
+
+    @staticmethod
+    def _y_manhattan(x):
+        return 1. / math.sqrt((x + 0.01))
+
+    @staticmethod
+    def _y_euclidean(x):
+        return 1. / math.sqrt((x + 0.01))
 
     @staticmethod
     def _get_distance_manhattan(pos1, pos2):
@@ -315,6 +345,10 @@ class TSPvariant(object):
     def _get_distance_euclidean(pos1, pos2):
         # 计算欧几里得距离
         return np.sqrt((pos1[0] - pos2[0]) ** 2 + (pos2[0] - pos2[1]) ** 2)
+
+    def save(self, best_log_file):
+        with open(best_log_file, 'w') as f:
+            f.write(self.game_info)
 
 
 if __name__ == '__main__':

@@ -65,8 +65,8 @@ class TSPvariantUI(object):
 
     def _draw_info(self):
         info1 = '({}, {}), steps = {}'.format(self.env.current_position[0], self.env.current_position[1], self.env.strength)
-        info_2 = 'scores: {} \n distance={:.4f}, strengt={:.4f}\nstart={:.4f} , cities={:.4f}'.format(
-            self.env.rewards, self.env.distance_score, self.env.strength_score, self.env.start_score, self.env.cities_score)
+        info_2 = 'scores: {:.3f} \ndistance={:.2f}, strength={:.2f}\nstart={:.2f}, cities={:.2f}'.format(
+           self.env.rewards if self.env.rewards else 0, self.env.distance_score, self.env.strength_score, self.env.start_score, self.env.cities_score)
         info2 = info_2.split('\n')[0]
         info3 = info_2.split('\n')[1]
         info4 = info_2.split('\n')[2]

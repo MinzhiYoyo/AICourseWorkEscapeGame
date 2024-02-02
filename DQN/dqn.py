@@ -18,9 +18,6 @@ class DQNet(nn.Module):
         # 两层全连接层处理info数据
         # 将上述两个结果拼接后，再进行一层全连接层
         # 最后输出
-
-        self.cv1 = nn.Conv2d()
-
         self.fc1 = nn.Linear(input_size, 256)
         self.fc2 = nn.Linear(256, 128)
         self.fc3 = nn.Linear(128, 64)
